@@ -5,17 +5,28 @@ date: "5/2/2018"
 output: html_document
 ---
 
-```{r, message = F}
+### Initial Steps
+
+**Load in library.**
+
+```{r, message = F, warning = F}
 # Loading packages
 library(tidyverse)
+library(ggpubr)
 ```
 
-```{r, message = F}
+**Load in data.**
+
+```{r, message = F, warning = F}
 # Loading data
 hospice <- read_tsv("data/unprocessed/28961-0002-Data.tsv")
 ```
 
-```{r, message = F}
+### NA Values
+
+**Let's see how many missing values we have.**
+
+```{r, message = F, warning = F}
 # Looking at number of missing values
 count_na <- hospice %>% 
   summarise_all(funs(sum(is.na(.)))) %>%
@@ -25,4 +36,243 @@ count_na <- hospice %>%
 count_na
 ```
 
+**The large number of NAs correspond to the variables with OS on the end, which indicate that they are "other" variables, and are there if there needs to be comments. The other variables are often "secondary" variables, which are there if the physician needs to add more than one value. Notable variables that have a large number of empty values (n = 4733 and n = 4683, correspondingly) is age of home health patients at arrival and discharge. There are few (n = 32) unavailable data for primary diagnosis, and a few (n = 22) unavailable data for whether or not the patient stayed at the same place from beginning to end of hospice care. We will omit these variables during data cleanup. Otherwise, most of the data is available.**
 
+### Types of Variable
+
+**Let's look at the types of variables we have.**
+
+```{r, message = F, warning = F}
+# Finding types of variables
+table(sapply(hospice, typeof))
+```
+
+**41 of the variables are characters and the 404 are numerical, however, almost all of them are dummy variables for factors. Looking through the codebook, some of these variables are specific versions of other variables. For example, there is one variable that is a factor with levels "WHITE ONLY", "BLACK ONLY", and "OTHER", and another factor variable that looks specifically at ethnicity with levels "HISPANIC OR LATINO", "WHITE, NOT HISPANIC OR LATINO", "BLACK, NOT HISPANIC OR LATINO", "OTHER OR UNKNOWN RACE, NOT HISPANIC OR LATINO", "INAPPLICABLE/NOT ASCERTAINED", "RF", and "DK". We will parse through these and omit redundant, specific variables in the data clean up section if we choose to focus on regression.**
+
+### Data Clean Up
+
+**We will now begin omitting variables with many NAs, as well as index variables such as patient IDs.**
+
+```{r, message = F, warning = F}
+# Removing ID variables
+hospice_final <- hospice
+
+hospice_final <- hospice_final %>%
+  select(-PATNUM,
+         -PTAGYNUM,
+         -SURYEAR)
+
+# Removing "other" variables with 
+hospice_final <- hospice_final %>%
+  select(-DISCHRGOS,
+         -WHRDSCHOS,
+         -OTHEROS,
+         -PREHMEOS,
+         -PSTHMEOS,
+         -PREHOSOS,
+         -PSTHOSOS,
+         -ULCRSTOS,
+         -PAINTL1OS,
+         -PAINFNL1,
+         -PAINTL2OS,
+         -PAINFNL2,
+         -PAINSTOS,
+         -OTHSVCOS,
+         -OTHRSNOS,
+         -MCFEEOS,
+         -MDFEEOS,
+         -GOVSRCOS,
+         -PRVINSOS,
+         -SOPOS,
+         -OTHPMTOS,
+         -MCFEE2OS,
+         -MDFEE2OS,
+         -OGVT2OS,
+         -PVTINS2OS,
+         -OTHSR2OS)
+```
+
+### Quantitative Variable Analysis
+
+**Let's take a look at the quantitative variables, specifically the age, pain levels and economic information.**
+
+```{r, message = F, warning = F}
+# Looking at age
+summary(hospice_final$AGEATINT)
+summary(hospice_final$AGEATDIS)
+
+# Visualizing the age information
+ggarrange(
+ggplot(hospice_final) + geom_histogram(mapping = aes(x = AGEATINT), bins = 10),
+ggplot(hospice_final) + geom_histogram(mapping = aes(x = AGEATDIS), bins = 10),
+ncol = 2,
+nrow = 1)
+
+# Looking at pain levels
+summary(filter(hospice_final, PAINLVL1 >= 0)$PAINLVL1)
+summary(filter(hospice_final, PAINLVL2 >= 0)$PAINLVL2)
+summary(filter(hospice_final, PAINREC3 >= 0)$PAINREC3)
+summary(filter(hospice_final, PAINREC4 >= 0)$PAINREC4)
+
+# Visualizing the pain level information
+ggarrange(
+ggplot(filter(hospice_final,PAINLVL1 >= 0)) + geom_histogram(mapping = aes(x = PAINLVL1), bins = 10),
+ggplot(filter(hospice_final, PAINLVL2 >= 0)) + geom_histogram(mapping = aes(x = PAINLVL2), bins = 5),
+ggplot(filter(hospice_final, PAINREC3 >= 0)) + geom_histogram(mapping = aes(x = PAINREC3), bins = 10),
+ggplot(filter(hospice_final, PAINREC4 >= 0)) + geom_histogram(mapping = aes(x = PAINREC4), bins = 5),
+ncol = 2,
+nrow = 2)
+
+# Looking at economic information
+summary(filter(hospice_final, CHARGES1 >= 0)$CHARGES1)
+summary(filter(hospice_final, TOTBLPRD >= 0)$TOTBLPRD)
+summary(filter(hospice_final, AVEDLYCH >= 0)$AVEDLYCH)
+summary(filter(hospice_final, TOTCHYR >= 0)$TOTCHYR)
+summary(filter(hospice_final, TOTPAID >= 0)$TOTPAID)
+
+# Visualizing the economic information
+ggarrange(
+ggplot(filter(hospice_final, CHARGES1 >= 0)) + geom_histogram(mapping = aes(x = CHARGES1), bins = 20),
+ggplot(filter(hospice_final, TOTBLPRD >= 0)) + geom_histogram(mapping = aes(x = TOTBLPRD), bins = 20),
+ggplot(filter(hospice_final, AVEDLYCH >= 0)) + geom_histogram(mapping = aes(x = AVEDLYCH), bins = 20),
+ggplot(filter(hospice_final, TOTCHYR >= 0)) + geom_histogram(mapping = aes(x = TOTCHYR), bins = 20),
+ggplot(filter(hospice_final, TOTPAID >= 0)) + geom_histogram(mapping = aes(x = TOTPAID), bins = 20),
+ncol = 3,
+nrow = 2)
+```
+
+**The mean age of patients during the interview was 68 years old, with a strong skew to the right, and the mean age of patients at dispatch was 77 years old, with a stronger skew to the rights. The pain levels have a high bias towards feeling no pain. But looking at the people who indicated they felt pain, it appears to be normally distributed with a mean around the halfways point. There does seem to be a disproportionate amount of people who indicated they felt the highest level of pain, and should be considered during the analysis. In terms of the economic measurements, most of them appeared to be skewed extremely to the left. The only exception was the total amount billed in the 12 months before discharge, which appeared to be more normally distributed than the others.**
+
+**Let's see if any of them are correlated. We will conduct the correlation test for age separately as there are missing values.**
+
+```{r, message = F, warning = F}
+# Consolidating the quantitative variables
+quant <- hospice_final %>% 
+  select(AGEATINT,
+         AGEATDIS,
+         PAINLVL1,
+         PAINLVL2,
+         PAINREC3,
+         PAINREC4,
+         CHARGES1,
+         TOTBLPRD,
+         AVEDLYCH,
+         TOTCHYR,
+         TOTPAID)
+
+quant[quant < 0] <- NA
+
+# Correlation Matrix
+cor(quant, use = "pairwise.complete.obs")
+```
+
+**Looking at just the pain levels, there does not appear to be a high level of correlation between the measurements. There were more correlations between the economic variables, such as the total amount billed for the last complete billing session and the total number of days that charge covered, total amount billed for the last complete billing session and the total amount paid to or by the primary payment souce, and total amount billed for the last 12 month before discharge and total amount paid to or by the pirmary payment source.**
+
+### Qualitative Variable Analysis
+
+**Because there were over 300 factor variables, I parsed through the ones that I thought were interesting, specifically, demographic information. Let's look at the break down of gender, race and marital status.**
+
+```{r, message = F, warning = F}
+# Isolating demographic information
+demographic <- hospice_final %>%
+   select(SEX,
+          HISPAN,
+          RACEAMIN,
+          RACEASIA,
+          RACEBLCK,
+          RACEPACI,
+          RACEWHT,
+          RACEIMP,
+          MARSTAT)
+
+demographic[1:9] <- lapply(demographic[1:9], factor)
+
+# Summarizing demographic information
+summary(demographic)
+```
+
+```{r}
+1059/9416
+```
+
+**In our sample, 40.8% were male, which is below the national average proportion. 88.8% of the sample were white, 9.1% were black, 4.7% were Latino, and there were only a small percentage of Asian and Native Americans. 38.2% were married, 34.9% were widowed, and 11.2% had never married. We can use these markers and see if there are any effects in quantitative measures.**
+
+### Qualitative and Quantitative Variable Analysis
+
+**Let's take an inital look at the effects of demographic factors on quantitative measurements.**
+
+```{r, message = F, warning = F}
+# Setting up effects dataset
+effects <- hospice_final %>% 
+  select(AGEATINT,
+         AGEATDIS,
+         PAINLVL1,
+         PAINLVL2,
+         PAINREC3,
+         PAINREC4,
+         CHARGES1,
+         TOTBLPRD,
+         AVEDLYCH,
+         TOTCHYR,
+         TOTPAID,
+         SEX,
+         RACEETHN,
+         MARSTAT
+         )
+
+effects[effects < 0] <- NA
+
+# Visualizing gender effects with boxplots
+ggarrange(
+ggplot(effects) + geom_boxplot(mapping = aes(x = SEX, group = SEX, y = AGEATINT)),
+ggplot(effects) + geom_boxplot(mapping = aes(x = SEX, group = SEX, y = AGEATDIS)),
+ggplot(effects) + geom_boxplot(mapping = aes(x = SEX, group = SEX, y = PAINLVL1)),
+ggplot(effects) + geom_boxplot(mapping = aes(x = SEX, group = SEX, y = PAINLVL2)),
+ggplot(effects) + geom_boxplot(mapping = aes(x = SEX, group = SEX, y = PAINREC3)),
+ggplot(effects) + geom_boxplot(mapping = aes(x = SEX, group = SEX, y = PAINREC4)),
+ggplot(effects) + geom_boxplot(mapping = aes(x = SEX, group = SEX, y = CHARGES1)),
+ggplot(effects) + geom_boxplot(mapping = aes(x = SEX, group = SEX, y = TOTBLPRD)),
+ggplot(effects) + geom_boxplot(mapping = aes(x = SEX, group = SEX, y = AVEDLYCH)),
+ggplot(effects) + geom_boxplot(mapping = aes(x = SEX, group = SEX, y = TOTCHYR)),
+ggplot(effects) + geom_boxplot(mapping = aes(x = SEX, group = SEX, y = TOTPAID)),
+nrow = 3,
+ncol = 4)
+
+# Visualizing race with boxplots
+ggarrange(
+ggplot(effects) + geom_boxplot(mapping = aes(x = RACEETHN, group = RACEETHN, y = AGEATINT)),
+ggplot(effects) + geom_boxplot(mapping = aes(x = RACEETHN, group = RACEETHN, y = AGEATDIS)),
+ggplot(effects) + geom_boxplot(mapping = aes(x = RACEETHN, group = RACEETHN, y = PAINLVL1)),
+ggplot(effects) + geom_boxplot(mapping = aes(x = RACEETHN, group = RACEETHN, y = PAINLVL2)),
+ggplot(effects) + geom_boxplot(mapping = aes(x = RACEETHN, group = RACEETHN, y = PAINREC3)),
+ggplot(effects) + geom_boxplot(mapping = aes(x = RACEETHN, group = RACEETHN, y = PAINREC4)),
+ggplot(effects) + geom_boxplot(mapping = aes(x = RACEETHN, group = RACEETHN, y = CHARGES1)),
+ggplot(effects) + geom_boxplot(mapping = aes(x = RACEETHN, group = RACEETHN, y = TOTBLPRD)),
+ggplot(effects) + geom_boxplot(mapping = aes(x = RACEETHN, group = RACEETHN, y = AVEDLYCH)),
+ggplot(effects) + geom_boxplot(mapping = aes(x = RACEETHN, group = RACEETHN, y = TOTCHYR)),
+ggplot(effects) + geom_boxplot(mapping = aes(x = RACEETHN, group = RACEETHN, y = TOTPAID)),
+nrow = 3,
+ncol = 4)
+
+# Visualizing marriage status with boxplots
+ggarrange(
+ggplot(effects) + geom_boxplot(mapping = aes(x = MARSTAT, group = MARSTAT, y = AGEATINT)),
+ggplot(effects) + geom_boxplot(mapping = aes(x = MARSTAT, group = MARSTAT, y = AGEATDIS)),
+ggplot(effects) + geom_boxplot(mapping = aes(x = MARSTAT, group = MARSTAT, y = PAINLVL1)),
+ggplot(effects) + geom_boxplot(mapping = aes(x = MARSTAT, group = MARSTAT, y = PAINLVL2)),
+ggplot(effects) + geom_boxplot(mapping = aes(x = MARSTAT, group = MARSTAT, y = PAINREC3)),
+ggplot(effects) + geom_boxplot(mapping = aes(x = MARSTAT, group = MARSTAT, y = PAINREC4)),
+ggplot(effects) + geom_boxplot(mapping = aes(x = MARSTAT, group = MARSTAT, y = CHARGES1)),
+ggplot(effects) + geom_boxplot(mapping = aes(x = MARSTAT, group = MARSTAT, y = TOTBLPRD)),
+ggplot(effects) + geom_boxplot(mapping = aes(x = MARSTAT, group = MARSTAT, y = AVEDLYCH)),
+ggplot(effects) + geom_boxplot(mapping = aes(x = MARSTAT, group = MARSTAT, y = TOTCHYR)),
+ggplot(effects) + geom_boxplot(mapping = aes(x = MARSTAT, group = MARSTAT, y = TOTPAID)),
+nrow = 3,
+ncol = 4)
+```
+
+**While these bloxplots are useful in visualizing discrepencies, some of them lack enough data points to be useful. It appears that for the most part, sex does not have an effect on any of the quantitative variables. There seems to be some effect on the economic variables when it comes to race and ethnicity, as with marriage status. We will need to conduct ANOVA and tests for equal mean among the groups to see if there are any actual differences and effects.**
+
+### Conclusion from EDA
+
+**From this exploratory data analysis we have identified missing values and some trends between and within variables. More research needs to go into exploring the different groups of categorical variables, and to further examine its effects on other variables.**
