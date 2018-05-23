@@ -1,0 +1,133 @@
+---
+title: "Creating Final Dataset"
+author: "Alex Furuya"
+date: "5/21/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# Loading Library
+library(tidyverse)
+```
+
+```{r}
+# Loading Raw Data
+final <- read_tsv("data/unprocessed/28961-0002-Data.tsv")
+
+# Removing Negative Values
+final[final < 0] = NA
+
+# Selecting Variables of Interest
+final <- final %>%
+  select(PHTYPE,
+         HOSPICEDAYS,
+         READMSS,
+         AVEDLYCH,
+         SEX,
+         AGEATINT,
+         HISPAN,
+         RACEAMIN,
+         RACEASIA,
+         RACEBLCK,
+         RACEPACI,
+         RACEWHT,
+         MARSTAT,
+         MCARENR,
+         MCAIDENR,
+         INPATIENT,
+         LIVALONE,
+         CDDX1,
+         TOTCDDX,
+         TOTPROC,
+         TOTALADL,
+         COGNFUNC,
+         ANYADDIR,
+         ANYHOSDEV,
+         ANYSERVC,
+         ANYOTHSVC,
+         ANYCOUNSL,
+         ANYSRVTYP,
+         ANYEMSRV,
+         PRIPAYOR)
+
+# Convert Qualitative Variables into Factors (Minus Primary Diagnosis)
+final <- final %>%
+  mutate(
+    PHTYPE = as.factor(PHTYPE),
+    READMSS = as.factor(READMSS),
+    SEX = as.factor(SEX),
+    HISPAN = as.factor(HISPAN),
+    RACEAMIN = as.factor(RACEAMIN),
+    RACEASIA = as.factor(RACEASIA),
+    RACEBLCK = as.factor(RACEBLCK),
+    RACEPACI = as.factor(RACEPACI),
+    RACEWHT = as.factor(RACEWHT),
+    MARSTAT = as.factor(MARSTAT),
+    MCARENR = as.factor(MCARENR),
+    MCAIDENR = as.factor(MCAIDENR),
+    INPATIENT = as.factor(INPATIENT),
+    LIVALONE = as.factor(LIVALONE),
+    ANYADDIR = as.factor(ANYADDIR),
+    ANYHOSDEV = as.factor(ANYHOSDEV),
+    ANYSERVC = as.factor(ANYSERVC),
+    ANYOTHSVC = as.factor(ANYOTHSVC),
+    ANYCOUNSL = as.factor(ANYCOUNSL),
+    ANYSRVTYP = as.factor(ANYSRVTYP),
+    ANYEMSRV = as.factor(ANYEMSRV),
+    PRIPAYOR = as.factor(PRIPAYOR)
+  )
+
+# Recoding Primary Diagnosis into Broader Categories
+
+# Extracting First Three Digits of ICD9 Code
+digit <- function(x){
+ str_extract(x, "^[A-Z0-9]{3}") 
+}
+
+final <- final %>%
+   mutate(CDDX1 = map(CDDX1, digit))
+
+# Converting Code into Numerical
+final <- final %>%
+  mutate(CDDX1 = as.numeric(CDDX1))
+
+# Categorizing Code into Broader Categories
+final <- final %>%
+  mutate(CDDX1 = 
+           ifelse(CDDX1 %in% 001:139, "infection",
+           ifelse(CDDX1 %in% 140:240, "neoplasms",
+           ifelse(CDDX1 %in% 240:279, "endocrine",
+           ifelse(CDDX1 %in% 280:289, "blood",
+           ifelse(CDDX1 %in% 290:319, "mental",
+           ifelse(CDDX1 %in% 320:389, "nerve",
+           ifelse(CDDX1 %in% 390:459, "circulatory",
+           ifelse(CDDX1 %in% 460:519, "respiratory",
+           ifelse(CDDX1 %in% 520:579, "digestive",
+           ifelse(CDDX1 %in% 580:629, "genitourinary",
+           ifelse(CDDX1 %in% 630:679, "pregnancy",
+           ifelse(CDDX1 %in% 680:709, "skin",
+           ifelse(CDDX1 %in% 710:739, "musculoskeletal",
+           ifelse(CDDX1 %in% 740:759, "congenital",
+           ifelse(CDDX1 %in% 760:779, "perinatal",
+           ifelse(CDDX1 %in% 780:799, "symptoms",
+           ifelse(CDDX1 %in% 800:999, "injury", "other")
+           )))))))))))))))))
+
+# Converting Primary Diagnosis into Factor
+final <- final %>%
+  mutate(CDDX1 = as.factor(CDDX1))
+
+# Creating New Factor Variable Whether or not Care was Self Pay
+final <- final %>%
+  mutate(SELFPAY = factor(ifelse(PRIPAYOR == 10, 1, 0)))
+
+summary(is.na(final))
+
+# Exporting CSV
+write.csv(final, file = "final.csv", row.names = F)
+```
+

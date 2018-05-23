@@ -1,0 +1,55 @@
+---
+title: "Pain Analysis"
+author: "Alex Furuya"
+date: "5/7/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(ggpubr)
+library(tree)
+library(randomForest)
+library(gbm)
+```
+
+**Load in data.**
+
+```{r, message = F, warning = F}
+# Loading data
+hospice <- read_tsv("data/unprocessed/28961-0002-Data.tsv")
+pain <- hospice %>%
+  select(HOSPICEDAYS,
+         SEX,
+         AGEATINT,
+         HISPAN,
+         RACEAMIN,
+         RACEASIA,
+         RACEBLCK,
+         RACEPACI,
+         RACEWHT,
+         TOTCDDX,
+         TOTPROC,
+         TOTALADL,
+         COGNFUNC,
+         ANYDVICE,
+         ANYHOSDEV,
+         PAINLVL1,
+         CHARGES1) %>%
+  mutate(PAINLVL1 = as.numeric(PAINLVL1))
+
+
+pain[pain < 0] <- NA
+pain[1:16] <- lapply(pain[1:16], factor)
+pain[c(1,3,16)] <- lapply(pain[c(1,3,16)], as.integer)
+
+ggplot(pain) + geom_boxplot(mapping = aes(x = TOTCDDX, group = TOTCDDX, y = PAINLVL1))
+ggplot(pain) + geom_boxplot(mapping = aes(x = ANYDVICE, group = ANYDVICE, y = PAINLVL1))
+ggplot(pain) + geom_boxplot(mapping = aes(x = RACEWHT, group = RACEWHT, y = PAINLVL1))
+
+fit <- lm(CHARGES1 ~ ., pain)
+summary(fit)
+
+tree_train <- tree(HOSPICEDAYS ~ ., data = pain)
+?tree
+```

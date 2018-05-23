@@ -1,0 +1,52 @@
+---
+title: "No_Insurance_Analysis"
+author: "Alex Furuya"
+date: "5/21/2018"
+output: html_document
+---
+
+```{r}
+# Loading Library
+library(tidyverse)
+```
+
+```{r}
+# Loading Data
+hospice <- read_csv("final.csv") %>%
+  mutate(
+    PHTYPE = as.factor(PHTYPE),
+    READMSS = as.factor(READMSS),
+    SEX = as.factor(SEX),
+    HISPAN = as.factor(HISPAN),
+    RACEAMIN = as.factor(RACEAMIN),
+    RACEASIA = as.factor(RACEASIA),
+    RACEBLCK = as.factor(RACEBLCK),
+    RACEPACI = as.factor(RACEPACI),
+    RACEWHT = as.factor(RACEWHT),
+    MARSTAT = as.factor(MARSTAT),
+    MCARENR = as.factor(MCARENR),
+    MCAIDENR = as.factor(MCAIDENR),
+    INPATIENT = as.factor(INPATIENT),
+    LIVALONE = as.factor(LIVALONE),
+    ANYADDIR = as.factor(ANYADDIR),
+    ANYHOSDEV = as.factor(ANYHOSDEV),
+    ANYSERVC = as.factor(ANYSERVC),
+    ANYOTHSVC = as.factor(ANYOTHSVC),
+    ANYCOUNSL = as.factor(ANYCOUNSL),
+    ANYSRVTYP = as.factor(ANYSRVTYP),
+    ANYEMSRV = as.factor(ANYEMSRV),
+    PRIPAYOR = as.factor(PRIPAYOR),
+    SELFPAY = as.factor(SELFPAY)
+  )
+
+# Deselecting Variables with Many NAs
+hospice <- hospice %>%
+  select(-HOSPICEDAYS, -AGEATINT, -LIVALONE)
+```
+
+```{r}
+fit <- glm(SELFPAY ~ . - PRIPAYOR, data = hospice, family = "binomial" )
+
+summary(fit)
+```
+
