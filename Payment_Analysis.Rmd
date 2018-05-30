@@ -14,57 +14,147 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r}
 # Loading Library
 library(tidyverse)
+library(modelr)
+library(boot)
+library(broom)
+library(leaps)
+library(ggpubr)
+library(glmnet)
+library(tree)
+library(randomForest)
+library(gbm)
 ```
 
 ### Data Wrangling
 
 ```{r}
 # Loading Data
-hospice <- read_csv("final.csv") %>%
-  mutate(
-    PHTYPE = as.factor(PHTYPE),
-    READMSS = as.factor(READMSS),
-    SEX = as.factor(SEX),
-    HISPAN = as.factor(HISPAN),
-    RACEAMIN = as.factor(RACEAMIN),
-    RACEASIA = as.factor(RACEASIA),
-    RACEBLCK = as.factor(RACEBLCK),
-    RACEPACI = as.factor(RACEPACI),
-    RACEWHT = as.factor(RACEWHT),
-    MARSTAT = as.factor(MARSTAT),
-    MCARENR = as.factor(MCARENR),
-    MCAIDENR = as.factor(MCAIDENR),
-    INPATIENT = as.factor(INPATIENT),
-    LIVALONE = as.factor(LIVALONE),
-    ANYADDIR = as.factor(ANYADDIR),
-    ANYHOSDEV = as.factor(ANYHOSDEV),
-    ANYSERVC = as.factor(ANYSERVC),
-    ANYOTHSVC = as.factor(ANYOTHSVC),
-    ANYCOUNSL = as.factor(ANYCOUNSL),
-    ANYSRVTYP = as.factor(ANYSRVTYP),
-    ANYEMSRV = as.factor(ANYEMSRV),
-    PRIPAYOR = as.factor(PRIPAYOR)
-  )
+hospice <- read_csv("final.csv") 
 
-# Filtering Out NAs in AVEDLYCH
-hospice <- hospice %>%
-  filter(!is.na(AVEDLYCH))
+# Setting Variables to Factors
+hospice[6:47] <- lapply(hospice[6:47], factor)
 
-# Deselecting Variables with Many NAs
-hospice <- hospice %>%
-  select(-HOSPICEDAYS, -AGEATINT, -LIVALONE)
+# Creating Training and Validation Set
+set.seed(3)
+train <- sample_n(tbl = hospice, replace = FALSE, size = 5400)
+test <- setdiff(hospice, train)
 ```
 
-# Multivariable Regression
+# Multivariable Regression with No Subset Selection
 
 ```{r}
-# Fitting GLM
-fit <- glm(AVEDLYCH ~., data = hospice)
+# Creating Raw Regression Model
+fit <- glm(AVEDLYCH ~., data = train)
 
-# Summarizing Fit
+# Summarizing Raw Fit
 summary(fit)
 
 # Diagnostic Plot
 plot(fit)
+
+# MSE of Raw Fit
+pred_fit <- predict(fit, test)
+MSE_fit <- mean(pred_fit^2)
 ```
+
+# Subset Selection
+
+```{r}
+full_subset <- regsubsets(train$AVEDLYCH ~ .,train, nvmax = 10, really.big = T)
+
+summary(full_subset)
+
+rss <- as.tibble(summary(full_subset)$rss)
+colnames(rss) <- c("rss")
+adjr2 <- as.tibble(summary(full_subset)$adjr2)
+colnames(adjr2) <- c("adjr2")
+cp <- as.tibble(summary(full_subset)$cp)
+colnames(cp) <- c("cp")
+bic <- as.tibble(summary(full_subset)$bic)
+colnames(bic) <- c("bic")
+variables <- as.tibble(seq.int(nrow(rss)))
+colnames(variables) <- c("variables")
+
+criteria <- bind_cols(variables, rss, adjr2, cp, bic)
+criteria
+
+which.min(criteria$bic)
+
+coef(full_subset ,7)
+
+subset <- glm(AVEDLYCH ~ TOTALADL + COGNFUNC + PHTYPE + READMSS + INPATIENT + MARSTAT5 + CDDX1mental, data = train)
+
+# MSE of Subset 
+pred_subset <- predict(subset, test)
+MSE_subset <- mean(pred_subset^2)
+```
+
+# Decision Tree
+
+```{r}
+# Creating Decision Tree
+tree <- tree(AVEDLYCH ~ ., data = train)
+
+# Looking at Splitting Criterions
+summary(tree)
+
+# Visualizing the Tree
+plot(tree) 
+text(tree, pretty = 0)
+
+# Finding MSE
+pred_tree <- predict(tree, test)
+MSE_tree <- mean(pred_tree^2)
+```
+
+# Bagging
+
+```{r}
+# Bagging 
+bag <- randomForest(AVEDLYCH~ ., train, importance = T)
+
+#Looking at the forest
+plot(bag)
+
+# MSE
+pred_bag <- predict(bag, test)
+MSE_bag <- mean(pred_bag^2)
+```
+
+# Random Forest
+
+```{r}
+# Creating new forest with 25 trees
+forest <- randomForest(AVEDLYCH ~ ., train, mtry = 10, ntree = 150)
+
+# Importance of variables
+importance(forest)
+
+# Plotting importance
+varImpPlot(forest)
+
+# MSE
+pred_forest <- predict(forest, test)
+MSE_forest <- mean(pred_forest^2)
+```
+
+# Boosting
+
+```{r}
+# Create the boosted trees
+boost <- gbm(AVEDLYCH ~ ., data = train, distribution = "gaussian", n.trees = 5000, interaction.depth = 4)
+
+# Relative influence of each variable
+summary(boost)
+
+# Plotting relative influence
+par(mfrow = c(1, 2))
+  plot(boost, i = "PHTYPE")
+  plot(boost, i = "INPATIENT")
+
+# MSE
+pred_boost <- predict(boost, test, n.trees = 5000)
+MSE_boost <- mean(pred_boost^2)
+```
+
 

@@ -14,6 +14,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r}
 # Loading Library
 library(tidyverse)
+read_tsv("data/unprocessed/28961-0002-Data.tsv")
 ```
 
 ### Data Wrangling

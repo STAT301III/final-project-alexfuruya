@@ -12,6 +12,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r}
 # Loading Library
 library(tidyverse)
+library(car)
 ```
 
 ```{r}
@@ -24,11 +25,9 @@ final[final < 0] = NA
 # Selecting Variables of Interest
 final <- final %>%
   select(PHTYPE,
-         HOSPICEDAYS,
          READMSS,
          AVEDLYCH,
          SEX,
-         AGEATINT,
          HISPAN,
          RACEAMIN,
          RACEASIA,
@@ -39,7 +38,6 @@ final <- final %>%
          MCARENR,
          MCAIDENR,
          INPATIENT,
-         LIVALONE,
          CDDX1,
          TOTCDDX,
          TOTPROC,
@@ -51,35 +49,15 @@ final <- final %>%
          ANYOTHSVC,
          ANYCOUNSL,
          ANYSRVTYP,
-         ANYEMSRV,
-         PRIPAYOR)
+         ANYEMSRV)
 
-# Convert Qualitative Variables into Factors (Minus Primary Diagnosis)
+# Filtering Out NAs 
 final <- final %>%
-  mutate(
-    PHTYPE = as.factor(PHTYPE),
-    READMSS = as.factor(READMSS),
-    SEX = as.factor(SEX),
-    HISPAN = as.factor(HISPAN),
-    RACEAMIN = as.factor(RACEAMIN),
-    RACEASIA = as.factor(RACEASIA),
-    RACEBLCK = as.factor(RACEBLCK),
-    RACEPACI = as.factor(RACEPACI),
-    RACEWHT = as.factor(RACEWHT),
-    MARSTAT = as.factor(MARSTAT),
-    MCARENR = as.factor(MCARENR),
-    MCAIDENR = as.factor(MCAIDENR),
-    INPATIENT = as.factor(INPATIENT),
-    LIVALONE = as.factor(LIVALONE),
-    ANYADDIR = as.factor(ANYADDIR),
-    ANYHOSDEV = as.factor(ANYHOSDEV),
-    ANYSERVC = as.factor(ANYSERVC),
-    ANYOTHSVC = as.factor(ANYOTHSVC),
-    ANYCOUNSL = as.factor(ANYCOUNSL),
-    ANYSRVTYP = as.factor(ANYSRVTYP),
-    ANYEMSRV = as.factor(ANYEMSRV),
-    PRIPAYOR = as.factor(PRIPAYOR)
-  )
+  na.omit
+
+# Skimming Off Abnormally High AVEDLYCH
+final <- final %>%
+  filter(AVEDLYCH < 1000)
 
 # Recoding Primary Diagnosis into Broader Categories
 
@@ -117,15 +95,71 @@ final <- final %>%
            ifelse(CDDX1 %in% 800:999, "injury", "other")
            )))))))))))))))))
 
-# Converting Primary Diagnosis into Factor
+# One Hot Encoding Factors
 final <- final %>%
-  mutate(CDDX1 = as.factor(CDDX1))
+  mutate(MARSTAT = factor(MARSTAT),
+         MCAIDENR = factor(MCAIDENR),
+         CDDX1 = factor(CDDX1))
 
-# Creating New Factor Variable Whether or not Care was Self Pay
+MARSTAT_dum <- as.data.frame(model.matrix(~final$MARSTAT)[,-1])
+MCAIDENR_dum <- as.data.frame(model.matrix(~final$MCAIDENR)[,-1])
+CDDX1_dum <- as.data.frame(model.matrix(~final$CDDX1)[,-1])
+
+final <- cbind(final, MARSTAT_dum, MCAIDENR_dum, CDDX1_dum)
+
 final <- final %>%
-  mutate(SELFPAY = factor(ifelse(PRIPAYOR == 10, 1, 0)))
+  select(-MARSTAT, -MCAIDENR, -CDDX1)
 
-summary(is.na(final))
+# Reorganizing Data
+final <- final[,c(3, 13, 14, 15, 16, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 17:47)]
+
+# Recoding Data
+final[,6] <- recode(final[,6],"2=0")
+final[,7] <- recode(final[,7],"2=0")
+final[,8] <- recode(final[,8],"2=0")
+final[,9] <- recode(final[,9],"2=0")
+final[,10] <- recode(final[,10],"2=0")
+final[,11] <- recode(final[,11],"2=0")
+final[,12] <- recode(final[,12],"2=0")
+final[,13] <- recode(final[,13],"2=0")
+final[,14] <- recode(final[,14],"2=0")
+final[,15] <- recode(final[,15],"2=0")
+final[,16] <- recode(final[,16],"2=0")
+final[,17] <- recode(final[,17],"2=0")
+final[,18] <- recode(final[,18],"2=0")
+final[,19] <- recode(final[,19],"2=0")
+final[,20] <- recode(final[,20],"2=0")
+final[,21] <- recode(final[,21],"2=0")
+final[,22] <- recode(final[,22],"2=0")
+final[,23] <- recode(final[,23],"2=0")
+
+# Renaming Data Variables
+colnames(final)[colnames(final)=="final$MARSTAT2"] <- "MARSTAT2"
+colnames(final)[colnames(final)=="final$MARSTAT3"] <- "MARSTAT3"
+colnames(final)[colnames(final)=="final$MARSTAT4"] <- "MARSTAT4"
+colnames(final)[colnames(final)=="final$MARSTAT5"] <- "MARSTAT5"
+colnames(final)[colnames(final)=="final$MARSTAT6"] <- "MARSTAT6"
+
+colnames(final)[colnames(final)=="final$MCAIDENR2"] <- "MCAIDENR2"
+colnames(final)[colnames(final)=="final$MCAIDENR3"] <- "MCAIDENR3"
+
+colnames(final)[colnames(final)=="final$CDDX1circulatory"] <- "CDDX1circulatory"
+colnames(final)[colnames(final)=="final$CDDX1congenital"] <- "CDDX1congenital"
+colnames(final)[colnames(final)=="final$CDDX1digestive"] <- "CDDX1digestive"
+colnames(final)[colnames(final)=="final$CDDX1endocrine"] <- "CDDX1endocrine"
+colnames(final)[colnames(final)=="final$CDDX1genitourinary"] <- "CDDX1genitourinary"
+colnames(final)[colnames(final)=="final$CDDX1infection"] <- "CDDX1infection"
+colnames(final)[colnames(final)=="final$CDDX1injury"] <- "CDDX1injury"
+colnames(final)[colnames(final)=="final$CDDX1mental"] <- "CDDX1mental"
+colnames(final)[colnames(final)=="final$CDDX1musculoskeletal"] <- "CDDX1musculoskeletal"
+colnames(final)[colnames(final)=="final$CDDX1neoplasms"] <- "CDDX1neoplasms"
+colnames(final)[colnames(final)=="final$CDDX1nerve"] <- "CDDX1nerve"
+colnames(final)[colnames(final)=="final$CDDX1other"] <- "CDDX1other"
+colnames(final)[colnames(final)=="final$CDDX1perinatal"] <- "CDDX1perinatal"
+colnames(final)[colnames(final)=="final$CDDX1pregnancy"] <- "CDDX1pregnancy"
+colnames(final)[colnames(final)=="final$CDDX1respiratory"] <- "CDDX1respiratory"
+colnames(final)[colnames(final)=="final$CDDX1skin"] <- "CDDX1skin"
+colnames(final)[colnames(final)=="final$CDDX1symptoms"] <- "CDDX1symptoms"
 
 # Exporting CSV
 write.csv(final, file = "final.csv", row.names = F)
