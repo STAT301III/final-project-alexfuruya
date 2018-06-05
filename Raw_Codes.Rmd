@@ -1,13 +1,17 @@
 ---
-title: "Regression Analysis"
+title: "Predicting Average Daily Cost of Palliative Care and Identifying Key Determinants"
 author: "Alex Furuya"
-date: "5/21/2018"
+date: "6/1/2018"
 output: html_document
 ---
 
-For this final project, I will be using the 2007 National Home and Hospice Care Survey,
+### Introduction
 
-### Library
+Palliative care is an approach to health care for people with life-ending illness that focuses on quality of life and relieving symptoms rather than extending life. It is a multidisciplinary approach that is said to be a necessity for patients, yet, its cost can vary and sometimes be expensive. For this final project, I will be using the 2007 National Home and Hospice Care Survey in order to predict average daily cost of palliative, or end-of-life, care. In doing this, I hope to create a way for patients, doctors, administrators and stake holders to be know how much the care may cost, and to identify key variables that determine it. I will be using a multivariable regression model, several decision tree models, and finally a neural network to create a machine to predict average cost based on a number of variables. 
+
+### Loading Library
+
+For this project, I will be loading in the 'tidyverse' library and other libraries to help with decision trees and neural network.
 
 ```{r, eval = FALSE}
 # Loading Library
@@ -26,9 +30,13 @@ use_python("")
 library(keras)
 ```
 
+### EDA
+
 ### Data Wrangling
 
-```{r}
+I have already created the final data set in another project under the name 'Creating_Final_Dataset.rmd'. Here I will be formatting it to aid in the model creations.
+
+```{r, eval=FALSE}
 # Loading Data
 hospice <- read_csv("final.csv") 
 
@@ -41,9 +49,13 @@ train <- sample_n(tbl = hospice, replace = FALSE, size = 5400)
 test <- setdiff(hospice, train)
 ```
 
-### Multivariable Regression with No Subset Selection
+# Multivariable Regression
 
-```{r}
+Here we will create two multivariable regression models for both prediction and inferences. We will be creating one model with all the variables, and another model with selected variables using regsubet.
+
+### Multivariable Regression with All Variables
+
+```{r, eval=FALSE}
 # Creating Raw Regression Model
 fit <- glm(AVEDLYCH ~., data = train)
 
@@ -58,9 +70,11 @@ pred_fit <- predict(fit, test)
 MSE_fit <- mean(pred_fit^2)
 ```
 
+Here we see that the statistically significant variables in predicting average daily cost of care is total number of Activities of Daily Living that need assistance, rating of cognitive function, whether the patient is a current home health patient or a hospice discharge, whether or not the patient was a readmission, the race of patient, whether or not the patiet was enrolled in Medicare or Medicaid, whether or not the patient was an inpatient at health care center before hospice care, whether or not the patient used one or more personal care and therapy services, whether or not the patient used emergency service, the marital status of the patient, and if the patient's primary diagnosis was genitourinary or not. With this model, the test mean squared error was 21,953.98.
+
 ### Multivariable Regression with Subset Selection
 
-```{r}
+```{r, eval=FALSE}
 # Running regsubsets to Identify Most Important Variables
 full_subset <- regsubsets(train$AVEDLYCH ~ .,train, nvmax = 10, really.big = T)
 
@@ -82,6 +96,8 @@ criteria
 # Identifying Model with Minimum BIC
 which.min(criteria$bic)
 
+ggplot(criteria) + geom_line(mapping = aes(x = variables, y = bic))
+
 # Identifying Coefficients in Previous Model
 coef(full_subset ,7)
 
@@ -92,9 +108,19 @@ pred_subset <- predict(subset, test)
 MSE_subset <- mean(pred_subset^2)
 ```
 
+Using regsubset, we find that the average daily cost of care was statistically significant with the total number of activities of daily living that needed handicap, the level of cognitive funticon, whether the patient was a home care patient or a hospice patient, whether or not the patient was readmitted, whether or not the patient was an inpatient elsewere, the marital status of thepatient, and whether or not the primary diagnosis of the patient was mental health related. With this model, the test mean squared error was 21,841.16.
+
+### Multivariable Regression Conclusion
+
+Both regression models had similar mean squared errors, and had selected similar variables as statistically significant in predicting average daily cost of care, namely total numbers of activities of daily living that need assistance, the type of patient in terms of whether they are a home patient or a hospice patient, and whether or not the patient was a readmission patient.
+
+# Trees
+
+We will now create decision trees to predict the average cost of daily care. We will be creating one tree, bagged trees, random forests and boosted trees.
+
 ### One Decision Tree
 
-```{r}
+```{r, eval=FALSE}
 # Creating Decision Tree
 tree <- tree(AVEDLYCH ~ ., data = train)
 
@@ -110,23 +136,29 @@ pred_tree <- predict(tree, test)
 MSE_tree <- mean(pred_tree^2)
 ```
 
+With a single tree, we see that it only selected two factors: whether or not the patient was a home patient or a hospice patient and whether or not the patient received care prior to palliative care. With this model, the test mean squared error was 21,212.89.
+
 ### Bagging Decision Tree
 
-```{r}
+```{r, eval=FALSE}
 # Bagging 
-bag <- randomForest(AVEDLYCH~ ., train, importance = T)
+bag <- randomForest(AVEDLYCH~ ., train, mtry = 47, importance = T)
 
 #Looking at the forest
 plot(bag)
+
+bag
 
 # MSE of Bagging Decision Tree
 pred_bag <- predict(bag, test)
 MSE_bag <- mean(pred_bag^2)
 ```
 
+
+
 ### Random Forest
 
-```{r}
+```{r, eval=FALSE}
 # Creating new forest with 25 trees
 forest <- randomForest(AVEDLYCH ~ ., train, mtry = 10, ntree = 150)
 
@@ -143,7 +175,7 @@ MSE_forest <- mean(pred_forest^2)
 
 ### Boosted Tree
 
-```{r}
+```{r, eval=FALSE}
 # Create the Boosted Tree
 boost <- gbm(AVEDLYCH ~ ., data = train, distribution = "gaussian", n.trees = 5000, interaction.depth = 4)
 
@@ -162,7 +194,7 @@ MSE_boost <- mean(pred_boost^2)
 
 ### Neural Network
 
-```{r}
+```{r, eval=FALSE}
 #Creating Model Matrix for Training Dataset
 x_train_num <- model.matrix(AVEDLYCH ~ TOTCDDX + TOTPROC + TOTALADL + COGNFUNC, data = train)[,-1]
 x_train_fac <- model.matrix(AVEDLYCH ~ . -TOTCDDX - TOTPROC - TOTALADL - COGNFUNC, data = train)[,-1]
@@ -238,7 +270,7 @@ MSE_neural <- results$mean_squared_error
 
 ### Comparison of Models
 
-```{r}
+```{r, eval=FALSE}
 # Compiling All MSEs from Previous Models
 error <- tibble(MSE_fit_raw, MSE_fit_subset, MSE_tree, MSE_bag, MSE_forest, MSE_boost, MSE_neural)
 

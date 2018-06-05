@@ -1,0 +1,245 @@
+---
+title: "Predicting Average Daily Cost of Palliative Care and Identifying Key Determinants"
+author: "Alex Furuya"
+date: "6/1/2018"
+output: html_document
+---
+
+# Introduction
+
+Palliative care is an approach to health care for people with life-ending illness that focuses on quality of life and relieving symptoms rather than extending life. It is a multidisciplinary approach that is said to be a necessity for patients, yet, its cost can vary and sometimes be expensive. For this final project, I will be using the 2007 National Home and Hospice Care Survey in order to predict average daily cost of palliative, or end-of-life, care. In doing this, I hope to create a way for patients, doctors, administrators and stake holders to be know how much the care may cost, and to identify key variables that determine it. I will be using a multivariable regression model, several decision tree models, and finally a neural network to create a machine to predict average cost based on a number of variables. 
+
+# Data Overview
+
+The unprocessed survey includes 9416 observations and 345 variables. The observations come from medical interviews of both home patients receiving palliative care and patients at hospice centers. The variables cover a number of topics, including demographic, medical diagnosis, symptoms and treatments and payment methods. The dataset was not complete, and some variables consisted mostly of missing values; these variables were usually "other" variables, where surveyors could write comments or personalized character strings. In addition, some variables were dummy variables of other variables; for example, there was one binary factor variable, "RACEWHT", that indicated whether or not a patient was white, and another variable "RACERECD", that included factor levels, "White" and "Black". These variables were omitted as to not create colinearity in my analysis, as well as other variables that might be too specific for the scope of analysis. 
+
+I also omitted missing values, as these would intefere with several of the model making methods in the future. I also simplified some of the factor variables and omitted observations that included, "Refuse to Answer" or some form of "NA". While conducting an exploratory data analysis, I found that there were some abnormally large values for response variable, average cost of daily care. As a result, I skimmed off any observations that had an average cost of daily care greater than 1000. 
+
+To aid with data analysis and insight creation, I onehot-encoded every factor variable with 3 or more levels. I also recategorized the primary diagnosis so that the machines won't be overwhelmed by the specifics of each disease. My final dataset, in the end, consisted of 5967 observations and 47 variables. The variables selected for analysis can be found in the table below with their respective variable type and descriptions.
+
+```{r include=FALSE}
+library(tidyverse)
+library(knitr)
+final <- read_csv("final.csv")
+variable_name <- tibble(variable_name = colnames(final))
+variable_type <- tibble(variable_type = c(rep("Numerical", 5), rep("Factor", 42)))
+variable_description <- tibble(variable_description = c(
+  "Average daily charges/payment",
+  "Total number of current diagnoses",
+  "Total number of procedures",
+  "Number of ADLs patient needs help with (DRESS, BATH, TRANSFER, WALK, or EAT)",
+  "Mental status",
+  "Patient type (1 = Current Home health patient, 0 = Hospice discharge)",
+  "Was this a re-admission for patient to agency for (home health/hospice) care? (1 = Yes, 0 = No)",
+  "Gender of Patient (1 = Male, 0 = Female)",
+  "Patient is Hispanic (1 = Yes, 0 = No)",
+  "Patient is American Indian or Alaska Native (1 = Yes, 0 = No)",
+  "Patient is Asian (1 = Yes, 0 = No)",
+  "Patient is Black (1 = Yes, 0 = No)",
+  "Patient is Pacific Islander (1 = Yes, 0 = No)",
+  "Patient is White (1 = Yes, 0 = No)",
+  "Enrolled in Medicare? (1 = Yes, 0 = No)",
+  "Was patient in a hospital, nursing home, other health care facility before receiving home health/hospice care, (1 = Yes, 0 = No)",
+  "Does patient have any advance directives? (1 = Yes, 0 = No)",
+  "Did patient use one or more medical devices? (1 = Yes, 0 = No)",
+  "Did patient use one or more services? (1 = Yes, 0 = No)",
+  "Did patient use one or more personal care and therapy services? (1 = Yes, 0 = No)",
+  "Did patient use one or more counseling and/or psychosocial services (1 = Yes, 0 = No)",
+  "Did patient used one or more services provided to family members/friends? (1 = Yes, 0 = No)",
+  "Did patient used one or more types of emergent care? (1 = Yes, 0 = No)",
+  "Patient is widowed. (1 = Yes, 0 = No)",
+  "Patient is divorced. (1 = Yes, 0 = No)",
+  "Patient is separated. (1 = Yes, 0 = No)",
+  "Patient has never married. (1 = Yes, 0 = No)",
+  "Patient is living with partner. (1 = Yes, 0 = No)",
+  "Not enrolled in Medicare? (1 = Yes, 0 = No)",
+  "Enrollment in Medicare pending? (1 = Yes, 0 = No)",
+  "Primary diagnosis is related to circulatory. (1 = Yes, 0 = No)",
+  "Primary diagnosis is related to congenital. (1 = Yes, 0 = No)",
+  "Primary diagnosis is related to digestive. (1 = Yes, 0 = No)",
+  "Primary diagnosis is related to endocrine. (1 = Yes, 0 = No)",
+  "Primary diagnosis is related to genitourinary. (1 = Yes, 0 = No)",
+  "Primary diagnosis is related to infection. (1 = Yes, 0 = No)",
+  "Primary diagnosis is related to injury. (1 = Yes, 0 = No)",
+  "Primary diagnosis is related to mental. (1 = Yes, 0 = No)",
+  "Primary diagnosis is related to musculoskeletal. (1 = Yes, 0 = No)",
+  "Primary diagnosis is related to neoplasms. (1 = Yes, 0 = No)",
+  "Primary diagnosis is related to nerve. (1 = Yes, 0 = No)",
+  "Primary diagnosis is related to other diseases. (1 = Yes, 0 = No)",
+  "Primary diagnosis is related to perinatal. (1 = Yes, 0 = No)",
+  "Primary diagnosis is related to pregnancy. (1 = Yes, 0 = No)",
+  "Primary diagnosis is related to respiratory. (1 = Yes, 0 = No)",
+  "Primary diagnosis is related to skin. (1 = Yes, 0 = No)",
+  "Primary diagnosis is related to symptoms. (1 = Yes, 0 = No)"
+  ))
+
+dataset_overview <- cbind(variable_name, variable_type, variable_description)
+
+target <- c("AVEDLYCH" ,"TOTCDDX", "TOTPROC", "TOTALADL", "COGNFUNC", "PHTYPE", "INPATIENT", "READMSS", "SEX", "HISPAN", "RACEAMIN", "RACEASIA", "RACEBLCK", "RACEPACI", "RACEWHT", "MARSTAT2",
+"MARSTAT3",
+"MARSTAT4",
+"MARSTAT5",
+"MARSTAT6",
+"MCARENR", 
+"MCAIDENR2", 
+"MCAIDENR3",
+"ANYADDIR",
+"ANYHOSDEV",
+"ANYSERVC",
+"ANYOTHSVC",
+"ANYCOUNSL",
+"ANYSRVTYP",
+"ANYEMSRV",
+"CDDX1circulatory",
+"CDDX1congenital",
+"CDDX1digestive",
+"CDDX1endocrine",
+"CDDX1genitourinary",
+"CDDX1infection",
+"CDDX1injury",
+"CDDX1mental",
+"CDDX1musculoskeletal",
+"CDDX1neoplasms",
+"CDDX1nerve",
+"CDDX1other",
+"CDDX1perinatal",
+"CDDX1pregnancy",
+"CDDX1respiratory",
+"CDDX1skin",
+"CDDX1symptoms")
+
+dataset_overview[match(target, dataset_overview$variable_name),]
+```
+
+```{r}
+kable(dataset_overview, n = 47)
+```
+
+# Model Creation
+
+I will be undertaking primarily supervised machine learning in order to predict the average cost of daily palliative care. In this section, I have split off 90% of the dataset for training these models and 10% to validate the models.
+
+## Multivariable Regression
+
+Here we will create two multivariable regression models for both prediction and inferences. We will be creating one model with all the variables, and another model with selected variables using regsubet.
+
+### Multivariable Regression with All Variables
+
+```{r, include=FALSE}
+fit_variable_name <- tibble(fit_variable_name = c("TOTALADL", "COGNFUNC", "PHTYPE", "READMSS", "RACEAMIN", "RACEBLCK", "RACEWHT", "MCARENR", "INPATIENT", "ANYOTHSVC", "ANYEMSRV", "MARSTAT5", "MCAIDENR2", "CDDX1genitourinary"))
+
+fit_variable_coefficient <- tibble(fit_variable_coefficient = c(3.90, 9.67, -106.97, -14.43, -102.09, -112.93, -104, -10.05, 32.19, 11.63, -12.34, 43.77, 8.59, 35.55))
+
+fit_variable <- cbind(fit_variable_name, fit_variable_coefficient)
+```
+
+Running a multivariable regression model with all variables, we see that some variables are significant, while the majority are not. The statistically significant variables can be found below:
+
+```{r}
+kable(fit_variable, n = 15)
+```
+
+Here we see that the statistically significant variables that have a postive relation with predicting average daily cost of care were the total number of Activities of Daily Living that need assistance and the rating of cognitive function.
+
+The cost of care increased if: the patient was inpatient at health care center before hospice care, the patient used one or more personal care and therapy services, the patient never married, or the patient's primary diagnosis was genitourinary.
+
+On the contrary, the cost of decreased if: the patient was a current home health patient, the patient was a readmission patient, or the patiet was enrolled in Medicare or Medicaid. Note that although Medicare and Medicaid have opposite signs, the way they are coded implies they have the same direction.
+
+This suggests that cost of healthcare increases with more involved forms of care. It also suggests that cost of care is reduced if the patient had prior access to health insurance either in the form of Medicare or Medicaid.
+
+With this model, the test mean squared error was 21,953.98.
+
+### Multivariable Regression with Subset Selection
+
+```{r, include=FALSE}
+fit2_variable_name <- tibble(fit_variable_name = c("TOTALADL", "COGNFUNC", "PHTYPE", "READMSS", "INPATIENT", "MARSTAT5", "CDDX1mental"))
+
+fit2_variable_coefficient <- tibble(fit_variable_coefficient = c(4.19, 8.60, -114.29, -14.65, 35.08, 45.21, -24.58))
+
+fit2_variable <- cbind(fit2_variable_name, fit2_variable_coefficient)
+```
+
+When performing forward subset selection and looking at the BIC trend, we find that the best performing model was the one with seven variables.
+
+![](/Users/alexfuruya/Desktop/301-3/Final Project/Final Project/assets/bic.png)
+
+The variables in this model and their coefficients can be found here:
+
+```{r}
+kable(fit2_variable, n = 7)
+```
+
+Using regsubset, we find that the model includes a subset of statistically significant variables from the previous model, but also includes CDDXmental, which has a negative relationship to the average daily cost of paliiative care. Most of the coefficients are similar otherwise. With this model, the test mean squared error was 21,841.16, so a slight improvement from the model with all variables.
+
+### Multivariable Regression Conclusion
+
+Both regression models had similar mean squared errors, and had selected similar variables as statistically significant in predicting average daily cost of care, including total numbers of activities of daily living that need assistance, the type of patient in terms of whether they are a home patient or a hospice patient, and whether or not the patient was a readmission patient. These models seem to suggest that home care can decrease the cost, and having insurance can be a sign of cheaper cost. We will revisit these insights in the conclusion.
+
+## Trees
+
+We will now create decision trees to predict the average cost of daily care. We will be creating one tree, bagged trees, random forests and boosted trees.
+
+### One Decision Tree
+
+With a single tree, we see that it only selected two factors: whether or not the patient was a home patient or a hospice patient and whether or not the patient received care prior to palliative care. Below is the tree diagram:
+
+![](/Users/alexfuruya/Desktop/301-3/Final Project/Final Project/assets/tree.png)
+
+Because there were only two branches,I decied not to prune it. With this model, the test mean squared error was 21,212.89.
+
+### Bagging Decision Tree
+
+We can create a bagged tree simply with the 'randomForest' function. To save sometime, we will only try 10 variables for each split of the tree. With this method, we find that the test mean squared error was 24,476.81, the worst so far out of the other models.
+
+### Random Forest
+
+Now we will try using several bagged trees to predict average daily care cost. Again, to save time, we will use mtry of 10. We will use p/3 trees, so 15 trees, in this model as best practice suggests. Below is the relative influence of each variable.
+
+![](/Users/alexfuruya/Desktop/301-3/Final Project/Final Project/assets/forest.png)
+
+This diagram shows that whether a patient was a home health patient or a hospice patient is great determinant in the average daily cost of palliative care. The next influential variable is suggested to be the number of diseases, and then the number of activities of daily living that need assistance. With this method, we find that the test mean squared error was 23,806.85.
+
+### Boosted Trees
+
+Now we will create fitted boosted regression trees with the 'gbm' function. We will be using 5000 trees each with an interaction depth of 4, and the distribution will be gaussian since we have a regression problem. The relative influence plot can be seen below:
+
+![](/Users/alexfuruya/Desktop/301-3/Final Project/Final Project/assets/boost.png)
+
+Again, whether the patient received care at home or at a hospice has a significant influence over the other variables. The plot also suggests that whether or not a patient received care prior to the palliative care was significant, and total number of diseases was also once again significant. With this method, we find that the test mean squared error was 22,150.37.
+
+### Decision Tree Conclusion
+
+Out of all the decision trees, it appears that the single decision tree worked best. Interestingly, the single decision tree only considered two factors, whether a patient received palliative care at home or at a hospice center, and whether the patient was receiving care elsewhere before receiving palliative care. Other factors were suggested to be useful in predicting average daily cost of palliative care, including the number of comorbidities, or multiple co-occuring diseases, though the relationship is not very clear. We will revisit these results in the conclusion.
+
+## Neural Network
+
+Now that we have created multivariable regression models and several tree-based models, we can now create a neural network. In order to do this, we first scale the numeric variables in both the training and the testing dataset and then create a model matrix of the predictor values and a vector of the average daily palliative care costs. Once we have standardized the data, we can create our neural network.
+
+The neural network I created with Keras has three layers. Each layer uses a rectified linear unit activator until a single output is created. It will also use the rmsprop optimizer and record the mean squared error as the machine runs. The machine will be created through a 4-fold cross validation process to ensure the best machine to predict average daily palliative care costs.
+
+After running the neural network, we find that the collected test mean squared error was 11,089.06, which is dramatically low compared to the other models. While this is impressive in terms of predictive power, it does not tell us which variables are important to consider in determining average daily palliative care cost.
+
+# Conclusion
+
+Below is a table of the models and their respective test MSE:
+
+```{r, include=FALSE}
+# Compiling All MSEs from Previous Models
+error_name <- tibble(model = c("multivariable_fit_all", "multivariable_fit_subset", "tree", "bag", "random_forest", "boost", "neural_network"))
+error_value <- tibble(mse = c(21953.98, 21841.16, 21212.89, 24476.81, 23296.75, 22150.37, 11089.06))
+mse <- cbind(error_name, error_value)
+```
+
+```{r}
+mse
+```
+
+As we can see, the best performing model was the neural network, and the others were comparably similar.
+
+While the neural network outperformed the other models in terms of predicting average daily cost of palliative care, it was not useful in helping us determine which variables officials can use to predict it. The linear model and the decision tree-based methods, though not very successful in predicting average daily cost of care, were instead useful for creating inferences. Though more rigorous statistical tests need to be conducted, we have identified several variables that may be useful for patients, doctors and administrators to foresee cost. Factors that were associated with higher average daily costs were if the patient receiving care at a hospice, if the patient used one or more personal care and therapy services, the patient never married, or the patient's primary diagnosis was genitourinary. The health related factors makes sense, as more intensive forms of care tend to be more expensive. The surprising postively associated factor was if the patient wasn't married, and will require more research to untangle this phenomenon. Factors that were associated with lower cost of care was if a patient was receiving care at home and if they had insurance through Medicaid or Medicare. Again, more research needs to be done to understand the nature of these correlations. 
+
+This project has several limitations. One such limitation was time constraint. There is value in running multiple neural networks, however, these are time-consuming processes and there was only time to run one during this quarter. Another limitation is that we omitted several specific variables that could potentially predict average daily cost and several observations were omitted because of missing values. While it can be challenging to use these variables and observations, they can make the analysis more complete and strengthen the models.
+
+There are several next steps for researchers and statistician. First, they can use my methods on updated datasets to get more up-to-date insight. The dataset I used was created more than 10 years ago, so it would be valuable for contemporary practitioners to have models trained with updated data. Second, it would be interesting to design experiments with random assignment to create sound inferences. While my analysis hints that there are demographic, medical and financial factors related to average daily cost of care, it would be valuable to confirm these with experimentation. Finally, researchers can look into trends with time series to identify impacts of public health interventions and see where changes are happening.
+
+In conclusion, there is potential for using machine learning to solve practical questions in the sphere of palliative care. Patients, doctors, administrators and investors and benefit from models including, but not limited to, multivariable regression, decision tree-based methods and neural networks. Each methods serve different purposes: neural networks can be very powerful in accurately predicting certain metrics, while regression models and decision trees can pin-point important variables for stakeholders to identify and potentially use for policymaking.
