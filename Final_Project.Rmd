@@ -201,7 +201,20 @@ This diagram shows that whether a patient was a home health patient or a hospice
 
 ### Boosted Trees
 
+```{r, include=F}
+influence_variable_name <- tibble(variable_name = c("PHTYPE", "INPATIENT", "TOTCDDX", "COGNFUNC", "TOTALADL"))
+
+influence_variable_coefficient <- tibble(relative_influence = c(56.45, 7.50, 6.18, 5.47, 4.84))
+
+influence <- cbind(influence_variable_name, influence_variable_coefficient)
+```
+
+
 Now we will create fitted boosted regression trees with the 'gbm' function. We will be using 5000 trees each with an interaction depth of 4, and the distribution will be gaussian since we have a regression problem. The relative influence plot can be seen below:
+
+```{r}
+kable(influence, n = 5)
+```
 
 ![](/Users/alexfuruya/Desktop/301-3/Final Project/Final Project/assets/boost.png)
 
@@ -225,13 +238,16 @@ Below is a table of the models and their respective test MSE:
 
 ```{r, include=FALSE}
 # Compiling All MSEs from Previous Models
-error_name <- tibble(model = c("multivariable_fit_all", "multivariable_fit_subset", "tree", "bag", "random_forest", "boost", "neural_network"))
-error_value <- tibble(mse = c(21953.98, 21841.16, 21212.89, 24476.81, 23296.75, 22150.37, 11089.06))
-mse <- cbind(error_name, error_value)
+Model <- tibble(model = c("multivariable_fit_all", "multivariable_fit_subset", "tree", "bag", "random_forest", "boost", "neural_network"))
+MSE <- tibble(mse = c(21953.98, 21841.16, 21212.89, 24476.81, 23296.75, 22150.37, 11089.06))
+error <- cbind(Model, MSE)
+error <- error %>% mutate(
+  rmse = sqrt(mse)
+)
 ```
 
 ```{r}
-mse
+error
 ```
 
 As we can see, the best performing model was the neural network, and the others were comparably similar.
